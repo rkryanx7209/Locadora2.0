@@ -34,6 +34,32 @@ const buscarEnderecoPorGPS = async (lat, lon) => {
   }
 };
 
+// Componente de Modal/Popup
+const Modal = ({ isOpen, title, message, onClose }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-sm w-full animate-fadeIn">
+        <div className="bg-red-500 text-white p-4 rounded-t-lg">
+          <h3 className="font-bold text-lg">{title}</h3>
+        </div>
+        <div className="p-6">
+          <p className="text-gray-700">{message}</p>
+        </div>
+        <div className="p-4 border-t flex justify-end">
+          <button
+            onClick={onClose}
+            className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 transition"
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 function App() {
   const [carroSelecionado, setCarroSelecionado] = useState("");
   const [statusAluguel, setStatusAluguel] = useState(false);
@@ -48,6 +74,46 @@ function App() {
   const [extrato, setExtrato] = useState(null);
   const [coordenadasGPS, setCoordenadasGPS] = useState({ lat: null, lon: null });
   const [buscandoEndereco, setBuscandoEndereco] = useState(false);
+
+  // States para o modal
+  const [modalAberto, setModalAberto] = useState(false);
+  const [modalTitulo, setModalTitulo] = useState("");
+  const [modalMensagem, setModalMensagem] = useState("");
+
+  // Ref para o input de câmera
+  const cameraInputRef = useRef(null);
+
+  // Função para mostrar popup personalizado
+  const mostrarPopup = (titulo, mensagem) => {
+    setModalTitulo(titulo);
+    setModalMensagem(mensagem);
+    setModalAberto(true);
+  };
+
+  // Função para abrir a câmera (tenta câmera primeiro, se não tiver, abre arquivos)
+  const abrirCameraOuArquivos = () => {
+    // Verifica se o dispositivo tem câmera
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      // Tem câmera disponível - tenta abrir a câmera
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.capture = 'environment'; // 'environment' usa câmera traseira, 'user' usa frontal
+
+      input.onchange = (e) => {
+        if (e.target.files && e.target.files[0]) {
+          handleFoto(e);
+        }
+      };
+
+      input.click();
+    } else {
+      // Dispositivo sem câmera ou em ambiente que não suporta - abre arquivos
+      if (cameraInputRef.current) {
+        cameraInputRef.current.click();
+      }
+    }
+  };
 
   // Função para gerar o PDF com a imagem e endereço
   const gerarPDF = (dados, imagemBase64, endereco) => {
@@ -106,14 +172,24 @@ function App() {
   };
 
   const registrarAluguel = () => {
-    if (!carroSelecionado) return alert("Selecione um carro!");
+    if (!carroSelecionado) {
+      mostrarPopup("Atenção", "Selecione um carro!");
+      return;
+    }
     setStatusAluguel(true);
     setResultadoTexto(`Veículo ${listaCarros[carroSelecionado].modelo} alugado com sucesso!`);
+    mostrarPopup("Sucesso", `Veículo ${listaCarros[carroSelecionado].modelo} alugado com sucesso!`);
   };
 
   const registrarDevolucao = () => {
-    if (!statusAluguel) return alert("Nenhum carro alugado!");
-    if (!dias || dias <= 0) return alert("Informe os dias!");
+    if (!statusAluguel) {
+      mostrarPopup("Atenção", "Nenhum carro alugado!");
+      return;
+    }
+    if (!dias || dias <= 0) {
+      mostrarPopup("Atenção", "Informe os dias!");
+      return;
+    }
     setEtapa('seguranca');
     setResultadoTexto("Realize a vistoria de devolução");
   };
@@ -153,8 +229,9 @@ function App() {
 
     setExtrato(novoExtrato);
     setResultadoTexto("DEVOLUÇÃO CONCLUÍDA - PDF gerado!");
+    mostrarPopup("Sucesso", "Devolução concluída! PDF gerado com sucesso!");
 
-    // CORREÇÃO: Passa o endereçoReal para o PDF
+    // Passa o endereçoReal para o PDF
     gerarPDF(novoExtrato, imagemBase64, enderecoReal);
     setEtapa('inicial');
   };
@@ -164,7 +241,7 @@ function App() {
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      alert("Por favor, selecione um arquivo de imagem válido!");
+      mostrarPopup("Erro", "Por favor, selecione um arquivo de imagem válido!");
       return;
     }
 
@@ -184,7 +261,7 @@ function App() {
           },
           async (error) => {
             console.error("Erro de geolocalização:", error);
-            alert(`Erro ao obter GPS: ${error.message}. Usando coordenadas padrão.`);
+            mostrarPopup("Aviso", `Erro ao obter GPS: ${error.message}. Usando coordenadas padrão.`);
             await finalizarVistoria(-23.5505, -46.6333, imagemBase64);
           },
           {
@@ -194,12 +271,12 @@ function App() {
           }
         );
       } else {
-        alert("Geolocalização não suportada. Usando localização padrão.");
+        mostrarPopup("Aviso", "Geolocalização não suportada. Usando localização padrão.");
         await finalizarVistoria(-23.5505, -46.6333, imagemBase64);
       }
     };
     reader.onerror = () => {
-      alert("Erro ao ler a imagem. Tente novamente.");
+      mostrarPopup("Erro", "Erro ao ler a imagem. Tente novamente.");
     };
     reader.readAsDataURL(file);
   };
@@ -222,6 +299,14 @@ function App() {
 
   return (
     <div className="min-h-screen bg-gray-100 py-6 px-4 font-sans text-gray-800">
+      {/* Modal Personalizado */}
+      <Modal
+        isOpen={modalAberto}
+        title={modalTitulo}
+        message={modalMensagem}
+        onClose={() => setModalAberto(false)}
+      />
+
       <div className="max-w-xl mx-auto space-y-4">
 
         {/* CARD PRINCIPAL */}
@@ -349,7 +434,7 @@ function App() {
               <div
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
-                className={`w-32 h-20 border-2 border-dashed flex flex-col items-center justify-center rounded text-xs transition ${etapa === 'biometria' ? 'bg-green-100 border-green-500 text-green-700' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                className={`w-32 h-20 border-2 border-dashed flex flex-col items-center justify-center rounded text-xs transition cursor-pointer ${etapa === 'biometria' ? 'bg-green-100 border-green-500 text-green-700' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
                   }`}
               >
                 {etapa === 'biometria' ? (
@@ -371,13 +456,26 @@ function App() {
               <div className="border-t pt-6 space-y-4">
                 <h4 className="font-bold text-xs uppercase">Verificação de identidade e localização</h4>
                 <div className="bg-blue-50 p-3 rounded">
+                  {/* Botão para abrir câmera/arquivos */}
+                  <button
+                    onClick={abrirCameraOuArquivos}
+                    className="w-full bg-blue-500 text-white py-2 rounded font-bold text-sm mb-2 hover:bg-blue-600 transition"
+                  >
+                    📸 Abrir Câmera / Selecionar Foto
+                  </button>
+
+                  {/* Input hidden para fallback */}
                   <input
+                    ref={cameraInputRef}
                     type="file"
                     onChange={handleFoto}
                     accept="image/*"
-                    className="text-[10px] w-full p-2 border rounded bg-white"
+                    className="hidden"
                   />
-                  <p className="text-[8px] text-gray-500 mt-1">📸 Tire uma foto do veículo para a vistoria</p>
+
+                  <p className="text-[8px] text-gray-500 mt-1">
+                    💡 Clique no botão acima para tirar foto com a câmera (celular) ou selecionar arquivo (PC)
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -439,6 +537,23 @@ function App() {
           </div>
         )}
       </div>
+
+      {/* Estilos adicionais para animação */}
+      <style jsx>{`
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
+            transform: scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: scale(1);
+          }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.2s ease-out;
+        }
+      `}</style>
     </div>
   );
 }
