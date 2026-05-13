@@ -1,14 +1,13 @@
 # 🚗 Locadora 2.0
 
-Sistema de locadora de veículos desenvolvido com JavaScript.
+Sistema de locadora de veículos desenvolvido com Vite e Node.js.
 
 ## 🔗 Acesse o projeto
 [locadora2-0.vercel.app](https://locadora2-0.vercel.app/)
 
 ## 🛠️ Tecnologias usadas
-- HTML
-- CSS
-- JavaScript
+- Node.js
+- Vite
 
 ## 📌 Funcionalidades
 - Cadastro de veículos
